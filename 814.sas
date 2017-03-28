@@ -1,3 +1,8 @@
+/*FoI 814 - Out of work benefits by COA*/
+
+/*Code from COA workless stats*/
+
+
 /* OA Official Stats SAS code
 The code is divided into 11 sections and the following are the areas which change based on the two macro variables below:
    Section 3:  Change the data set ie year and month eg pers201205 for May 2012 data
@@ -9,8 +14,9 @@ The code is divided into 11 sections and the following are the areas which chang
 
 * SECTION 1: CONNECTING TO THE SERVER AND CREATING LIBRARY LINKS TO THE DATA;
 
-%let quarter=Feb2012;  /*Quarter being ran*/
-%let persqtr=201202;   /*Relevant person dataset for quarter*/
+%let quarter=May2009;  /*Quarter being ran*/
+%let persqtr=200905;   /*Relevant person dataset for quarter*/
+
 
 *SECTION 2: CREATING MACRO VARIABLES TO BE USED IN THE ROUNDING ALGORITHMS ;
 
@@ -34,14 +40,16 @@ The code is divided into 11 sections and the following are the areas which chang
 
 * SECTION 3: ACCESSING THE BENEFITS DATA ;
 
+
 *  Select working age key out of work benefit claimants from the frozen dataset; 
 data kowb ; 
 set nsdata.pers&persqtr. (keep=ccnino cccoa cclsoa ccdz ccward2003 ccla ccgor ccstatgp ccclient);
 where ccclient=2 and ccstatgp in (1,2,3,5) ;
 if cclsoa=' ' then cclsoa=ccdz;
 run;
- 
+
 * SECTION 4: PREPARING DATA TO CREATE COUNTS FOR THE BENEFIT CLAIMANTS ;
+
 
 *  Remove duplicates (there shouldnt be any) just incase;
 proc sort data=kowb nodupkey;
@@ -114,7 +122,6 @@ rename stat4=varu5;
 %create(5); *  This creates five columns of zeros ready to be populated with numbers;
 run;
 
-
 * SECTION 6: PROBABILISTIC ROUNDING ;
 
 
@@ -129,7 +136,7 @@ run;
 
 *  Also do a quick check to see that the prob rounded figures are within five of the unrounded ones;
 *  Prob_check should contain zero observations;
-
+rsubmit;
 data temp2 (drop=varr1-varr5 column) prob_check;
 set temp;
 format varu1 varu2 varu3 varu4 varu5
@@ -162,6 +169,7 @@ run;
 
 
 * SECTION 7: CONTROLLED ROUNDING ;
+
 
 *  Use proc contents to obtain the number of observations in prob_check;
 *  This will be used to form part of the QA report later;
@@ -235,6 +243,7 @@ run;
 
 *SECTION 8: CHECKING TO SEE WHETHER CONTROLLED ROUNDING WORKED;
 
+
 *  Check that the control rounding process worked;
 *  Difftot should be zero as the purpose of control rounding was to match the total;
 *  Again, check that the stat groups have been rounded by no more than 5;
@@ -257,8 +266,8 @@ data kowb_coa_controunded (rename=(var1=owb var2=jsa var3=ib_esa var4=lp var5=ot
 set temp3 (keep=cccoa var1-var5);
 run;
 
-
 * SECTION 9: ATTACHING LABELS ON ROUNDED DATA ;
+
 
 *  Merge on a bunch of higher spatial level codes;
 data final_lookup (drop=data_zone rename=(coa=cccoa lsoacode=cclsoa ward_code=ccward2003 la2009=ccla gor_code=ccgor));
@@ -278,11 +287,13 @@ by cccoa;
 if a;
 run;
 
+
 * SECTION 10 : PRODUCING OUTPUT OF THE ROUNDED FIGURES BY GOVERNMENT OFFICE REGION ;
+
 
 * Producing output of the rounded figures split by Goverment region ;
 * rn stands for government office region eg rn_1 is the first gov region ;
-
+rsubmit;
  data rn_1 rn_2 rn_3 rn_4 rn_5 rn_6 rn_7 rn_8 rn_9 rn_10 rn_11 ;
  set kowb_coa_final;
 
@@ -306,8 +317,8 @@ run;
 %do i=1 %to 10;
 
 ods listing close ;
-ods html file="\\dfz72623\Folders\CLIENT_STATISTICS\Live_Running\Dissemination\COA_workless\&quarter.\rn_&i..xls"  style=minimal ;
-proc print data=work.rn_&i noobs label STYLE(HEADER)= {FONT_WEIGHT=BOLD Background=light grey};
+ods html body="report.xls";
+proc print data=rn_&i;
     var ccgor gor_name ccla la2009_name ccward2003 ward_name cclsoa cccoa jsa ib_esa lp oth owb ;
     label      ccgor='Government Region Code'
             gor_name='Government Region Name'
@@ -321,14 +332,18 @@ proc print data=work.rn_&i noobs label STYLE(HEADER)= {FONT_WEIGHT=BOLD Backgrou
                  oth='Others on income related benefit'
                  owb=' "Total" Out of Work Benefits' ;
               
-   Title 'Out of Work Benefits Claimants in Census Output Areas: February 2012 ' ;
+   Title 'Out of Work Benefits Claimants in Census Output Areas: May 2009 ' ;
    
+run;
+ods html close ;
+ods listing ;
+
+proc download infile="report.xls"
+			  outfile="\\Dfz72739\Folders\CLIENT_STATISTICS\Live_Running\FOIs\replies\2017\501 - 1000\814 Out of Work Benefits Claimants in Census Output Areas\Prob Output\rn_&i..xls";
 run;
 %end;
 %mend ;
 %try ;
-ods html close ;
-ods listing ;
 
 
 * SECTION 11: QUALITY ASSURANCE CHECKS:
@@ -370,6 +385,7 @@ ods listing ;
 /***********************/
 *  CHECK 3              ;
 /***********************/
+
 /*Table at LSOA*/
 proc sort data=kowb;
 by cclsoa;
@@ -457,6 +473,7 @@ proc contents data=coa_lsoa_check (keep=cclsoa) noprint out=contents_lsoa (keep=
 *  CHECK 4              ;
 /***********************/
 /*Table at WARD*/
+
 proc sort data=kowb;
 by ccward2003;
 run;
@@ -542,6 +559,7 @@ proc contents data=coa_ward_check (keep=ccward2003) noprint out=contents_ward (k
 *  CHECK 5              ;
 /***********************/
 /*Table at LA*/
+
 proc sort data=kowb;
 by ccla;
 run;
@@ -622,11 +640,11 @@ run;
 * Obtain a contents report to tell you that there were no differences;
 proc contents data=coa_la_check (keep=ccla) noprint out=contents_la (keep=memname nobs); run;
 
-
 /***********************/
 *  CHECK 6              ;
 /***********************/
 /*Table at GOR*/
+
 proc sort data=kowb;
 by ccgor;
 run;
@@ -711,6 +729,7 @@ proc contents data=coa_gor_check (keep=ccgor) noprint out=contents_gor (keep=mem
 *   QA REPORT         ;
 /*********************/
 
+
 * BRING ALL OF THE QUALITY ASSURANCE CHECKS TOGETHER IN ONE DATASET;
 * Every QA dataset should contain no observations;
 data qa_report;
@@ -722,15 +741,14 @@ run;
 * Make sure an Excel file is created and this should be named QA_Report; 
 
 ods listing close ;
-ods html file="\\dfz72739\Folders\CLIENT_STATISTICS\Live_Running\Dissemination\COA_workless\&quarter\QA_Report.xls"  style=minimal ;
+ods html body="report.xls";
 title "QA report COA worklessness &quarter - Every QA dataset should contain no observations";
 PROC PRINT DATA=qa_report noobs;
 RUN;
-   
 run;
 ods html close ;
 ods listing ;
 
-
-
- 
+proc download infile="report.xls"
+			  outfile="\\Dfz72739\Folders\CLIENT_STATISTICS\Live_Running\FOIs\replies\2017\501 - 1000\814 Out of Work Benefits Claimants in Census Output Areas\Prob Output\qa_report.xls";
+run;
