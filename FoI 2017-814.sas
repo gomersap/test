@@ -1,3 +1,8 @@
+/*FoI 814 - Out of work benefits by COA*/
+
+/*Code from COA workless stats*/
+
+
 /* OA Official Stats SAS code
 The code is divided into 11 sections and the following are the areas which change based on the two macro variables below:
    Section 3:  Change the data set ie year and month eg pers201205 for May 2012 data
@@ -11,21 +16,25 @@ The code is divided into 11 sections and the following are the areas which chang
 
 signon ifdnsas1;
 
-%let quarter=Feb2012;  /*Quarter being ran*/
-%let persqtr=201202;   /*Relevant person dataset for quarter*/
+rsubmit;
+%let quarter=May2009;  /*Quarter being ran*/
+%let persqtr=200905;   /*Relevant person dataset for quarter*/
+endrsubmit;
 
 *  The postcode area contains a Output Area lookup file to link geographies;
-libname nsdata '/secure/mdspublish/released' server=ifdnsas1;
-libname postcode '/secure/NST_Project/project/Postcode/released' server=ifdnsas1;
+libname nsdata "/masked/p14/dwp/admindata/mdspublish/released";
+libname postcode "/masked/p13/admindata/dwp/postcode/released" server=ifdnsas1;
+libname rwork slibref=work server=ifdnsas1;
 libname unixwork slibref=work server=ifdnsas1;
 rsubmit;
-libname nsdata '/secure/mdspublish/released';
-libname postcode '/secure/NST_Project/project/Postcode/released';
+libname nsdata "/masked/p14/dwp/admindata/mdspublish/released";
+libname postcode "/masked/p13/admindata/dwp/postcode/released";
 endrsubmit;
+
 
 *SECTION 2: CREATING MACRO VARIABLES TO BE USED IN THE ROUNDING ALGORITHMS ;
 
-
+rsubmit;
 %macro create(n);                       /* These next three macros are involved with  */
  %do i=1 %to &n;                        /*  the controlled rounding of COA  		  */
   varr&i=ranuni(0);                     /*  data - to protect small counts  		  */
@@ -42,18 +51,25 @@ endrsubmit;
  diffa&i=var&i-varu&i;
 %end;
 %mend;
+endrsubmit;
 
 * SECTION 3: ACCESSING THE BENEFITS DATA ;
 
+rsubmit;
 *  Select working age key out of work benefit claimants from the frozen dataset; 
 data kowb ; 
 set nsdata.pers&persqtr. (keep=ccnino cccoa cclsoa ccdz ccward2003 ccla ccgor ccstatgp ccclient);
 where ccclient=2 and ccstatgp in (1,2,3,5) ;
 if cclsoa=' ' then cclsoa=ccdz;
 run;
- 
+endrsubmit;
+
+
+
+
 * SECTION 4: PREPARING DATA TO CREATE COUNTS FOR THE BENEFIT CLAIMANTS ;
 
+rsubmit;
 *  Remove duplicates (there shouldnt be any) just incase;
 proc sort data=kowb nodupkey;
 by ccnino;
@@ -109,10 +125,14 @@ run;
 proc sort data=kowb_coa_unrounded;
 by cccoa;
 run;
+endrsubmit;
+
+
+
 
 * SECTION 5: PREPARING DATA FOR PROBABILISTIC ROUNDING;
 
-
+rsubmit;
 *  Rename the variables to be put through a generic probabilistic rounding process; 
 data temp;								
 set kowb_coa_unrounded;														
@@ -124,6 +144,9 @@ rename stat3=varu4;
 rename stat4=varu5;
 %create(5); *  This creates five columns of zeros ready to be populated with numbers;
 run;
+endrsubmit;
+
+
 
 
 * SECTION 6: PROBABILISTIC ROUNDING ;
@@ -140,7 +163,7 @@ run;
 
 *  Also do a quick check to see that the prob rounded figures are within five of the unrounded ones;
 *  Prob_check should contain zero observations;
-
+rsubmit;
 data temp2 (drop=varr1-varr5 column) prob_check;
 set temp;
 format varu1 varu2 varu3 varu4 varu5
@@ -170,10 +193,11 @@ diff=var1-sum(of var2-var5);  *  Compute a variable for the difference between t
 output temp2;
 if diff1>=5 or diff2>=5 or diff3>=5 or diff4>=5 or diff5>=5 then output prob_check;
 run;
+endrsubmit;
 
 
 * SECTION 7: CONTROLLED ROUNDING ;
-
+rsubmit;
 *  Use proc contents to obtain the number of observations in prob_check;
 *  This will be used to form part of the QA report later;
 proc contents data=prob_check (keep=cccoa) noprint out=contents_prob (keep=memname nobs);run;
@@ -243,9 +267,12 @@ end;
 %resultsa; *  This computes the difference between the control rounded figures and the unrounded;
 difftot=var1-sum(of var2-var5);  *  Create a variable which shows the difference between the total and the control rounded stat groups;
 run;
+endrsubmit;
+
+
 
 *SECTION 8: CHECKING TO SEE WHETHER CONTROLLED ROUNDING WORKED;
-
+rsubmit;
 *  Check that the control rounding process worked;
 *  Difftot should be zero as the purpose of control rounding was to match the total;
 *  Again, check that the stat groups have been rounded by no more than 5;
@@ -267,10 +294,10 @@ run;
 data kowb_coa_controunded (rename=(var1=owb var2=jsa var3=ib_esa var4=lp var5=oth));
 set temp3 (keep=cccoa var1-var5);
 run;
-
+endrsubmit;
 
 * SECTION 9: ATTACHING LABELS ON ROUNDED DATA ;
-
+rsubmit;
 *  Merge on a bunch of higher spatial level codes;
 data final_lookup (drop=data_zone rename=(coa=cccoa lsoacode=cclsoa ward_code=ccward2003 la2009=ccla gor_code=ccgor));
 set postcode.coalookuptable_all_geogs_new (keep=coa lsoacode ward_code ward_name la2009 la2009_name gor_code gor_name data_zone);
@@ -288,12 +315,14 @@ merge kowb_coa_controunded final_lookup (in=a);
 by cccoa;
 if a;
 run;
+endrsubmit;
+
 
 * SECTION 10 : PRODUCING OUTPUT OF THE ROUNDED FIGURES BY GOVERNMENT OFFICE REGION ;
 
 * Producing output of the rounded figures split by Goverment region ;
 * rn stands for government office region eg rn_1 is the first gov region ;
-
+rsubmit;
  data rn_1 rn_2 rn_3 rn_4 rn_5 rn_6 rn_7 rn_8 rn_9 rn_10 rn_11 ;
  set kowb_coa_final;
 
@@ -309,16 +338,16 @@ else if ccgor='K' then output rn_9;
 else if ccgor='W' then output rn_10;
 else if ccgor='X' then output rn_11;
 run;
-
+endrsubmit;
 
 * Macro to produce figures for the 10 Government regions excluding Scotland;
-
+rsubmit;
 %macro try ;
 %do i=1 %to 10;
 
 ods listing close ;
-ods html file="\\dfz72623\Folders\CLIENT_STATISTICS\Live_Running\Dissemination\COA_workless\&quarter.\rn_&i..xls"  style=minimal ;
-proc print data=work.rn_&i noobs label STYLE(HEADER)= {FONT_WEIGHT=BOLD Background=light grey};
+ods html body="report.xls";
+proc print data=rn_&i;
     var ccgor gor_name ccla la2009_name ccward2003 ward_name cclsoa cccoa jsa ib_esa lp oth owb ;
     label      ccgor='Government Region Code'
             gor_name='Government Region Name'
@@ -332,14 +361,20 @@ proc print data=work.rn_&i noobs label STYLE(HEADER)= {FONT_WEIGHT=BOLD Backgrou
                  oth='Others on income related benefit'
                  owb=' "Total" Out of Work Benefits' ;
               
-   Title 'Out of Work Benefits Claimants in Census Output Areas: February 2012 ' ;
+   Title 'Out of Work Benefits Claimants in Census Output Areas: May 2009 ' ;
    
+run;
+ods html close ;
+ods listing ;
+
+proc download infile="report.xls"
+			  outfile="\\Dfz72739\Folders\CLIENT_STATISTICS\Live_Running\FOIs\replies\2017\501 - 1000\814 Out of Work Benefits Claimants in Census Output Areas\Prob Output\rn_&i..xls";
 run;
 %end;
 %mend ;
 %try ;
-ods html close ;
-ods listing ;
+endrsubmit;
+
 
 
 * SECTION 11: QUALITY ASSURANCE CHECKS:
@@ -381,6 +416,7 @@ ods listing ;
 /***********************/
 *  CHECK 3              ;
 /***********************/
+rsubmit;
 /*Table at LSOA*/
 proc sort data=kowb;
 by cclsoa;
@@ -462,12 +498,13 @@ run;
 
 * Obtain a contents report to tell you that there were no differences;
 proc contents data=coa_lsoa_check (keep=cclsoa) noprint out=contents_lsoa (keep=memname nobs); run;
-
+endrsubmit;
 
 /***********************/
 *  CHECK 4              ;
 /***********************/
 /*Table at WARD*/
+rsubmit;
 proc sort data=kowb;
 by ccward2003;
 run;
@@ -547,12 +584,13 @@ run;
 
 * Obtain a contents report to tell you that there were no differences;
 proc contents data=coa_ward_check (keep=ccward2003) noprint out=contents_ward (keep=memname nobs); run;
-
+endrsubmit;
 
 /***********************/
 *  CHECK 5              ;
 /***********************/
 /*Table at LA*/
+rsubmit;
 proc sort data=kowb;
 by ccla;
 run;
@@ -632,12 +670,13 @@ run;
 
 * Obtain a contents report to tell you that there were no differences;
 proc contents data=coa_la_check (keep=ccla) noprint out=contents_la (keep=memname nobs); run;
-
+endrsubmit;
 
 /***********************/
 *  CHECK 6              ;
 /***********************/
 /*Table at GOR*/
+rsubmit;
 proc sort data=kowb;
 by ccgor;
 run;
@@ -717,11 +756,13 @@ run;
 
 * Obtain a contents report to tell you that there were no differences;
 proc contents data=coa_gor_check (keep=ccgor) noprint out=contents_gor (keep=memname nobs); run;
+endrsubmit;
 
 /*********************/
 *   QA REPORT         ;
 /*********************/
 
+rsubmit;
 * BRING ALL OF THE QUALITY ASSURANCE CHECKS TOGETHER IN ONE DATASET;
 * Every QA dataset should contain no observations;
 data qa_report;
@@ -733,15 +774,15 @@ run;
 * Make sure an Excel file is created and this should be named QA_Report; 
 
 ods listing close ;
-ods html file="\\dfz72739\Folders\CLIENT_STATISTICS\Live_Running\Dissemination\COA_workless\&quarter\QA_Report.xls"  style=minimal ;
+ods html body="report.xls";
 title "QA report COA worklessness &quarter - Every QA dataset should contain no observations";
 PROC PRINT DATA=qa_report noobs;
 RUN;
-   
 run;
 ods html close ;
 ods listing ;
 
-
-
- 
+proc download infile="report.xls"
+			  outfile="\\Dfz72739\Folders\CLIENT_STATISTICS\Live_Running\FOIs\replies\2017\501 - 1000\814 Out of Work Benefits Claimants in Census Output Areas\Prob Output\qa_report.xls";
+run;
+endrsubmit;
